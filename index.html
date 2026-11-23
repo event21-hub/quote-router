@@ -4,16 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>見積り依頼システム</title>
+<style>
+  body{ font-family: sans-serif; margin: 24px; color: #1c1e21; }
+  .btn{ display: block; margin: 12px 0; padding: 16px; border-radius: 10px;
+        background: #007DCF; color: #fff; text-align: center;
+        text-decoration: none; font-size: 17px; font-weight: 700; }
+  .btn-sub{ background: #e4e6eb; color: #1c1e21; }
+</style>
+</head>
+<body>
+<p>移動しています…</p>
+<div id="fallback" style="display:none">
+  <p>自動で切り替わらない場合は、こちらをタップしてください。</p>
+  <a id="goMobile" class="btn" href="#">スマホ版で開く</a>
+  <a id="goDesktop" class="btn btn-sub" href="#">PC版で開く</a>
+</div>
 <script>
 // 振り分けページ：スマホならスマホ版へ、PCならデスクトップ版へ自動で振り分ける。
 // Apps Scriptの中では自動切り替えがブロックされるため、このページをApps Scriptの外
-// （GitHub Pagesなどの無料ホスティング）に置き、ここを入口URLとして使う。
+// （GitHub Pages）に置き、ここを入口URLとして使う。
 // 使い方：このページのURLに ?page=dashboard などのパラメータを付けて開く。
-//   例：https://<ホスト>/router.html?page=dashboard
-//   スマホ → https://script.google.com/macros/s/<ID>/exec?page=m_dashboard
-//   PC     → https://script.google.com/macros/s/<ID>/exec?page=dashboard
 // page以外のパラメータ（rowId, token, isRequote, originalNo, reorder等）はそのまま引き継ぐ。
 // ?desktop=1 を付けるとPC版へ行く（このページ自身のlocalStorageにも記憶する）。
+// v2（2026-11-23）：iPhone実機で判定が外れたため、判定を多段化
+// （UA／Client Hints／タッチ＋画面幅）し、実行タイミングをDOMContentLoadedへ、
+// 自動で進まない場合の手動ボタン（スマホ版／PC版）も常備した。
 (function(){
   var APP_URL = 'https://script.google.com/macros/s/AKfycbyxnFzD-2DY7wqpPzqQ2k9lnTIptpDs0P29CrSak9zzML1LW7_P8CdPhuI_7P1r-YvY/exec';
   var MOBILE_PAGES = {
@@ -46,40 +61,73 @@
   }
   function isPhone(){
     var ua = (navigator.userAgent || '');
-    if (/iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua)) return true;
-    return window.innerWidth <= 767 &&
-      (('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
+    if (/iPhone|iPod|Android/i.test(ua)) return true;
+    if (navigator.userAgentData && navigator.userAgentData.mobile) return true;
+    var touch = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
+    if (!touch) return false;
+    // 「デスクトップ用サイトを表示」等でUAがPC化していても、タッチ＋小さな画面ならスマホ扱い
+    var sw = Math.min((window.screen && window.screen.width) || 9999,
+                      (window.screen && window.screen.height) || 9999);
+    if (sw <= 500) return true;
+    if (window.innerWidth <= 767) return true;
+    return false;
   }
-  try {
-    var params = parseQuery(window.location.search);
-    var preferDesktop = params.desktop === '1';
-    try {
-      if (window.localStorage) {
-        if (preferDesktop) localStorage.setItem('routerPreferDesktop', '1');
-        else if (localStorage.getItem('routerPreferDesktop') === '1') preferDesktop = true;
-      }
-    } catch (e) {}
-    var page = params.page || '';
-    var target = APP_URL;
+  function buildTarget(params, page, mobile){
     var q = {};
     Object.keys(params).forEach(function(k){ if (k !== 'desktop') q[k] = params[k]; });
-    if (isPhone() && !preferDesktop && MOBILE_PAGES.hasOwnProperty(page)) {
+    if (mobile && MOBILE_PAGES.hasOwnProperty(page)) {
       q.page = MOBILE_PAGES[page];
     } else if (page) {
       q.page = page;
     }
     var qs = buildQuery(q);
-    target = APP_URL + (qs ? '?' + qs : '');
-    var go = document.getElementById('go');
-    if (go) go.href = target;
-    window.location.replace(target);
-  } catch (e) {
-    // リダイレクトに失敗した場合は画面のリンクから手動で進める
+    return APP_URL + (qs ? '?' + qs : '');
   }
+  function route(){
+    try {
+      var params = parseQuery(window.location.search);
+      var preferDesktop = params.desktop === '1';
+      try {
+        if (window.localStorage) {
+          if (preferDesktop) localStorage.setItem('routerPreferDesktop', '1');
+          else if (localStorage.getItem('routerPreferDesktop') === '1') preferDesktop = true;
+        }
+      } catch (e) {}
+      var page = params.page || '';
+      var mobileTarget = buildTarget(params, page, true);
+      var desktopTarget = buildTarget(params, page, false);
+      var gm = document.getElementById('goMobile');
+      var gd = document.getElementById('goDesktop');
+      if (gm) {
+        gm.href = mobileTarget;
+        gm.addEventListener('click', function(){
+          try { localStorage.removeItem('routerPreferDesktop'); } catch (e) {}
+        });
+      }
+      if (gd) {
+        gd.href = desktopTarget;
+        gd.addEventListener('click', function(){
+          try { localStorage.setItem('routerPreferDesktop', '1'); } catch (e) {}
+        });
+      }
+      var target = (isPhone() && !preferDesktop) ? mobileTarget : desktopTarget;
+      window.location.replace(target);
+    } catch (e) {
+      var f = document.getElementById('fallback');
+      if (f) f.style.display = 'block';
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', route);
+  } else {
+    route();
+  }
+  // 自動遷移がブロックされた環境向け：少し待ってもこのページにいたら手動ボタンを出す
+  setTimeout(function(){
+    var f = document.getElementById('fallback');
+    if (f) f.style.display = 'block';
+  }, 900);
 })();
 </script>
-</head>
-<body>
-<p>移動しています。自動で切り替わらない場合は<a id="go" href="https://script.google.com/macros/s/AKfycbyxnFzD-2DY7wqpPzqQ2k9lnTIptpDs0P29CrSak9zzML1LW7_P8CdPhuI_7P1r-YvY/exec">こちら</a>をタップしてください。</p>
 </body>
 </html>
