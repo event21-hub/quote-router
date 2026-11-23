@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>判定テスト</title>
+<style>
+  body{ font-family: sans-serif; margin: 24px; color: #1c1e21; font-size: 15px; line-height: 1.7; }
+  .k{ color: #5f6368; font-size: 12px; }
+  .v{ font-weight: 700; word-break: break-all; }
+  .result{ font-size: 22px; font-weight: 800; color: #007DCF; }
+</style>
+</head>
+<body>
+<p>この端末の判定結果です。</p>
+<div class="k">判定</div><div class="result" id="r">…</div>
+<div class="k">UA（ブラウザの自己申告）</div><div class="v" id="ua">…</div>
+<div class="k">Client Hints mobile</div><div class="v" id="uad">…</div>
+<div class="k">画面サイズ（screen）</div><div class="v" id="sc">…</div>
+<div class="k">表示領域（innerWidth）</div><div class="v" id="iw">…</div>
+<div class="k">タッチ（maxTouchPoints）</div><div class="v" id="tp">…</div>
+<div class="k">localStorage routerPreferDesktop</div><div class="v" id="ls">…</div>
+<script>
+(function(){
+  function isPhone(){
+    var ua = (navigator.userAgent || '');
+    if (/iPhone|iPod|Android/i.test(ua)) return true;
+    if (navigator.userAgentData && navigator.userAgentData.mobile) return true;
+    var touch = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
+    if (!touch) return false;
+    var sw = Math.min((window.screen && window.screen.width) || 9999,
+                      (window.screen && window.screen.height) || 9999);
+    if (sw <= 500) return true;
+    if (window.innerWidth <= 767) return true;
+    return false;
+  }
+  document.getElementById('r').textContent = isPhone() ? 'スマホ' : 'PC';
+  document.getElementById('ua').textContent = navigator.userAgent || '(なし)';
+  document.getElementById('uad').textContent =
+    (navigator.userAgentData ? String(navigator.userAgentData.mobile) : '(未対応)');
+  document.getElementById('sc').textContent =
+    (window.screen ? (window.screen.width + ' × ' + window.screen.height) : '(なし)');
+  document.getElementById('iw').textContent = String(window.innerWidth);
+  document.getElementById('tp').textContent = String(navigator.maxTouchPoints);
+  var ls = '(読めない)';
+  try { ls = localStorage.getItem('routerPreferDesktop') || '(なし)'; } catch (e) {}
+  document.getElementById('ls').textContent = ls;
+})();
+</script>
+</body>
+</html>
